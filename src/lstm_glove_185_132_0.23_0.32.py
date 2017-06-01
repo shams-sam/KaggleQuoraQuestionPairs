@@ -4,6 +4,8 @@ Example of an LSTM model with GloVe embeddings along with magic features
 Tested under Keras 2.0 with Tensorflow 1.0 backend
 
 Single model may achieve LB scores at around 0.18+, average ensembles can get 0.17+
+
+Reference:
 https://www.kaggle.com/lystdo/lb-0-18-lstm-with-glove-and-magic-features
 '''
 
@@ -32,6 +34,14 @@ from keras.layers.normalization import BatchNormalization
 from keras.callbacks import EarlyStopping, ModelCheckpoint
 
 from sklearn.preprocessing import StandardScaler
+
+# --- addition start ---
+
+from nltk.corpus import stopwords
+from collections import Counter
+import gensim
+
+# --- addition end --- 
 
 # import sys
 # reload(sys)
@@ -211,6 +221,76 @@ def q2_freq(row):
 def q1_q2_intersect(row):
     return(len(set(q_dict[row['question1']]).intersection(set(q_dict[row['question2']]))))
 
+# --- addition start ---'
+
+stops = set(stopwords.words("english"))
+def word_match_share(row):
+    q1words = {}
+    q2words = {}
+    for word in str(row['question1']).lower().split():
+        if word not in stops:
+            q1words[word] = 1
+    for word in str(row['question2']).lower().split():
+        if word not in stops:
+            q2words[word] = 1
+    if len(q1words) == 0 or len(q2words) == 0:
+        # The computer-generated chaff includes a few questions that are nothing but stopwords
+        return 0
+    shared_words_in_q1 = [w for w in q1words.keys() if w in q2words]
+    shared_words_in_q2 = [w for w in q2words.keys() if w in q1words]
+    R = (len(shared_words_in_q1) + len(shared_words_in_q2))/(len(q1words) + len(q2words))
+    return R
+
+train_qs = pd.Series(train_df['question1'].tolist() + train_df['question2'].tolist()).astype(str)
+test_qs = pd.Series(test_df['question1'].tolist() + test_df['question2'].tolist()).astype(str)
+
+def get_weight(count, eps=10000, min_count=2):
+    if count < min_count:
+        return 0
+    else:
+        return 1 / (count + eps)
+
+eps = 5000 
+words = (" ".join(train_qs)).lower().split()
+counts = Counter(words)
+weights = {word: get_weight(count) for word, count in counts.items()}
+
+def tfidf_word_match_share(row):
+    q1words = {}
+    q2words = {}
+    for word in str(row['question1']).lower().split():
+        if word not in stops:
+            q1words[word] = 1
+    for word in str(row['question2']).lower().split():
+        if word not in stops:
+            q2words[word] = 1
+    if len(q1words) == 0 or len(q2words) == 0:
+        # The computer-generated chaff includes a few questions that are nothing but stopwords
+        return 0
+    
+    shared_weights = [weights.get(w, 0) 
+                      for w in q1words.keys() if w in q2words] + [weights.get(w, 0) for w in q2words.keys() if w in q1words]
+    total_weights = [weights.get(w, 0) for w in q1words] + [weights.get(w, 0) for w in q2words]
+    
+    R = np.sum(shared_weights) / np.sum(total_weights)
+    return R
+
+model = gensim.models.Word2Vec.load_word2vec_format(WORD2VEC_MODEL, binary=True)
+
+def process(sentence):
+    return [word 
+            for word in re.findall('[a-z]+', re.sub('-', '', sentence.lower())) 
+            if model.wv.vocab.get(word, None) != None]
+
+def word2vec_n_similarity(row):
+    q1 = process(str(row['question1']))
+    q2 = process(str(row['question2']))
+    if len(q1) == 0 or len(q2) == 0:
+        return 0
+    return model.wv.n_similarity(q1, q2)
+
+# --- addition end ---
+
 train_df['q1_q2_intersect'] = train_df.apply(q1_q2_intersect, axis=1, raw=True)
 train_df['q1_freq'] = train_df.apply(q1_freq, axis=1, raw=True)
 train_df['q2_freq'] = train_df.apply(q2_freq, axis=1, raw=True)
@@ -219,8 +299,41 @@ test_df['q1_q2_intersect'] = test_df.apply(q1_q2_intersect, axis=1, raw=True)
 test_df['q1_freq'] = test_df.apply(q1_freq, axis=1, raw=True)
 test_df['q2_freq'] = test_df.apply(q2_freq, axis=1, raw=True)
 
-leaks = train_df[['q1_q2_intersect', 'q1_freq', 'q2_freq']]
-test_leaks = test_df[['q1_q2_intersect', 'q1_freq', 'q2_freq']]
+# --- addition start ---
+
+train_df['word_share'] = train_df.apply(word_match_share, axis=1, raw=True)
+train_df['tfidf_word_share'] = train_df.apply(tfidf_word_match_share, axis=1, raw=True)
+train_df['n_similariy'] = train_df.apply(word2vec_n_similarity, axis=1, raw=True)
+
+test_df['word_share'] = test_df.apply(word_match_share, axis=1, raw=True)
+test_df['tfidf_word_share'] = test_df.apply(tfidf_word_match_share, axis=1, raw=True)
+test_df['n_similarity'] = test_df.apply(word2vec_n_similarity, axis=1, raw=True)
+
+# --- addition end ---
+
+# --- remove start ---
+
+# leaks = train_df[['q1_q2_intersect', 'q1_freq', 'q2_freq']]
+# test_leaks = test_df[['q1_q2_intersect', 'q1_freq', 'q2_freq']]
+
+# --- remove end ---
+
+# --- addition start ---
+
+leaks = train_df[['q1_q2_intersect', 
+                  'q1_freq', 
+                  'q2_freq', 
+                  'word_share', 
+                  'tfidf_word_share', 
+                  'n_similarity']]
+test_leaks = test_df[['q1_q2_intersect', 
+                      'q1_freq', 
+                      'q2_freq', 
+                      'word_share', 
+                      'tfidf_word_share', 
+                      'n_similarity']]
+
+# --- addition end ---
 
 ss = StandardScaler()
 ss.fit(np.vstack((leaks, test_leaks)))
