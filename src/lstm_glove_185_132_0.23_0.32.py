@@ -303,7 +303,7 @@ test_df['q2_freq'] = test_df.apply(q2_freq, axis=1, raw=True)
 
 train_df['word_share'] = train_df.apply(word_match_share, axis=1, raw=True)
 train_df['tfidf_word_share'] = train_df.apply(tfidf_word_match_share, axis=1, raw=True)
-train_df['n_similariy'] = train_df.apply(word2vec_n_similarity, axis=1, raw=True)
+train_df['n_similarity'] = train_df.apply(word2vec_n_similarity, axis=1, raw=True)
 
 test_df['word_share'] = test_df.apply(word_match_share, axis=1, raw=True)
 test_df['tfidf_word_share'] = test_df.apply(tfidf_word_match_share, axis=1, raw=True)
