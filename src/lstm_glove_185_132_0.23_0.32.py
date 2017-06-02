@@ -240,7 +240,7 @@ def counter_cosine_similarity(c1, c2):
 
 # Reference:
 # https://stackoverflow.com/questions/14720324/compute-the-similarity-between-two-lists
-def sentence_cosine_similarity(listA, listA):
+def sentence_cosine_similarity(listA, listB):
     counterA = Counter(listA)
     counterB = Counter(listB)
     return counter_cosine_similarity(counterA, counterB)
