@@ -52,6 +52,7 @@ import gensim
 ########################################
 BASE_DIR = '../data/'
 EMBEDDING_FILE = BASE_DIR + 'glove.42B.300d.txt'
+WORD2VEC_MODEL = BASE_DIR + 'GoogleNews-vectors-negative300.bin'
 TRAIN_DATA_FILE = BASE_DIR + 'train.csv'
 TEST_DATA_FILE = BASE_DIR + 'test.csv'
 MAX_SEQUENCE_LENGTH = 30
@@ -273,6 +274,7 @@ def tfidf_word_match_share(row):
     total_weights = [weights.get(w, 0) for w in q1words] + [weights.get(w, 0) for w in q2words]
     
     R = np.sum(shared_weights) / np.sum(total_weights)
+    R = 0 if np.isnan(R) else R
     return R
 
 model = gensim.models.Word2Vec.load_word2vec_format(WORD2VEC_MODEL, binary=True)
