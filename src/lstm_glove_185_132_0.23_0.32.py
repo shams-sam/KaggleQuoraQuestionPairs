@@ -225,28 +225,81 @@ def q1_q2_intersect(row):
 
 # --- addition start ---'
 
-def sentence_distance(seq1, seq2):
-    dist = []
-    for s1, s2 in zip(seq1, seq2):
-        dist.append(max(len(set(s1) - set(s2)), len(set(s2)- set(s1))))
-    return dist
+def jaccard(row):
+    wic = set(row['question1']).intersection(set(row['question2']))
+    uw = set(row['question1']).union(row['question2'])
+    if len(uw) == 0:
+        uw = [1]
+    return (len(wic) / len(uw))
 
-def counter_cosine_similarity(c1, c2):
-    terms = set(c1).union(c2)
-    dotprod = sum(c1.get(k, 0) * c2.get(k, 0) for k in terms)
-    magA = math.sqrt(sum(c1.get(k, 0)**2 for k in terms))
-    magB = math.sqrt(sum(c2.get(k, 0)**2 for k in terms))
-    return dotprod / (magA * magB)
+def common_words(row):
+    return len(set(row['question1']).intersection(set(row['question2'])))
 
-# Reference:
-# https://stackoverflow.com/questions/14720324/compute-the-similarity-between-two-lists
-def sentence_cosine_similarity(listA, listB):
-    counterA = Counter(listA)
-    counterB = Counter(listB)
-    return counter_cosine_similarity(counterA, counterB)
+def total_unique_words(row):
+    return len(set(row['question1']).union(row['question2']))
 
-def sentence_intersections(listA, listB):
-    return len(set(listA).intersection(set(listB)))
+def total_unq_words_stop(row, stops):
+    return len([x for x in set(row['question1']).union(row['question2']) if x not in stops])
+
+def wc_diff(row):
+    return abs(len(row['question1']) - len(row['question2']))
+
+def wc_ratio(row):
+    l1 = len(row['question1'])*1.0
+    l2 = len(row['question2'])
+    if l2 == 0:
+        return np.nan
+    if l1 / l2:
+        return l2 / l1
+    else:
+        return l1 / l2
+
+def wc_diff_unique(row):
+    return abs(len(set(row['question1'])) - len(set(row['question2'])))
+
+def wc_ratio_unique(row):
+    l1 = len(set(row['question1'])) * 1.0
+    l2 = len(set(row['question2']))
+    if l2 == 0:
+        return np.nan
+    if l1 / l2:
+        return l2 / l1
+    else:
+        return l1 / l2
+
+def wc_diff_unique_stop(row, stops=None):
+    return abs(len([x for x in set(row['question1']) if x not in stops]) - len([x for x in set(row['question2']) if x not in stops]))
+
+def wc_ratio_unique_stop(row, stops=None):
+    l1 = len([x for x in set(row['question1']) if x not in stops])*1.0
+    l2 = len([x for x in set(row['question2']) if x not in stops])
+    if l2 == 0:
+        return np.nan
+    if l1 / l2:
+        return l2 / l1
+    else:
+        return l1 / l2
+
+def same_start_word(row):
+    if not row['question1'] or not row['question2']:
+        return np.nan
+    return int(row['question1'][0] == row['question2'][0])
+
+def char_diff(row):
+    return abs(len(''.join(row['question1'])) - len(''.join(row['question2'])))
+
+def char_ratio(row):
+    l1 = len(''.join(row['question1']))
+    l2 = len(''.join(row['question2']))
+    if l2 == 0:
+        return np.nan
+    if l1 / l2:
+        return l2 / l1
+    else:
+        return l1 / l2
+
+def char_diff_unique_stop(row, stops=None):
+    return abs(len(''.join([x for x in set(row['question1']) if x not in stops])) - len(''.join([x for x in set(row['question2']) if x not in stops])))
 
 stops = set(stopwords.words("english"))
 def word_match_share(row):
@@ -292,6 +345,27 @@ def tfidf_word_match_share(row):
     if len(q1words) == 0 or len(q2words) == 0:
         # The computer-generated chaff includes a few questions that are nothing but stopwords
         return 0
+
+    shared_weights = [weights.get(w, 0)
+                      for w in q1words.keys() if w in q2words] + [weights.get(w, 0) for w in q2words.keys() if w in q1words]
+    total_weights = [weights.get(w, 0) for w in q1words] + [weights.get(w, 0) for w in q2words]
+
+    R = np.sum(shared_weights) / np.sum(total_weights)
+    R = 0 if np.isnan(R) else R
+    return R
+
+def tfidf_word_match_share_stops(row, stops=None, weights=None):
+    q1words = {}
+    q2words = {}
+    for word in row['question1']:
+        if word not in stops:
+            q1words[word] = 1
+    for word in row['question2']:
+        if word not in stops:
+            q2words[word] = 1
+    if len(q1words) == 0 or len(q2words) == 0:
+        # The computer-generated chaff includes a few questions that are nothing but stopwords
+        return 0
     
     shared_weights = [weights.get(w, 0) 
                       for w in q1words.keys() if w in q2words] + [weights.get(w, 0) for w in q2words.keys() if w in q1words]
@@ -315,6 +389,44 @@ def word2vec_n_similarity(row):
         return 0
     return model.wv.n_similarity(q1, q2)
 
+def build_features(X, data, stops, weights):
+    f = functools.partial(word_match_share, stops=stops)
+    X['word_match'] = data.apply(f, axis=1, raw=True) #1
+
+    f = functools.partial(tfidf_word_match_share, weights=weights)
+    X['tfidf_wm'] = data.apply(f, axis=1, raw=True) #2
+
+    f = functools.partial(tfidf_word_match_share_stops, stops=stops, weights=weights)
+    X['tfidf_wm_stops'] = data.apply(f, axis=1, raw=True) #3
+
+    X['jaccard'] = data.apply(jaccard, axis=1, raw=True) #4
+    X['wc_diff'] = data.apply(wc_diff, axis=1, raw=True) #5
+    X['wc_ratio'] = data.apply(wc_ratio, axis=1, raw=True) #6
+    X['wc_diff_unique'] = data.apply(wc_diff_unique, axis=1, raw=True) #7
+    X['wc_ratio_unique'] = data.apply(wc_ratio_unique, axis=1, raw=True) #8
+    X['n_similarity'] = data.apply(word2vec_n_similarity, axis=1, raw=True)
+
+    f = functools.partial(wc_diff_unique_stop, stops=stops)
+    X['wc_diff_unq_stop'] = data.apply(f, axis=1, raw=True) #9
+    f = functools.partial(wc_ratio_unique_stop, stops=stops)
+    X['wc_ratio_unique_stop'] = data.apply(f, axis=1, raw=True) #10
+
+    X['same_start'] = data.apply(same_start_word, axis=1, raw=True) #11
+    X['char_diff'] = data.apply(char_diff, axis=1, raw=True) #12
+
+    f = functools.partial(char_diff_unique_stop, stops=stops)
+    X['char_diff_unq_stop'] = data.apply(f, axis=1, raw=True) #13
+
+#     X['common_words'] = data.apply(common_words, axis=1, raw=True)  #14
+    X['total_unique_words'] = data.apply(total_unique_words, axis=1, raw=True)  #15
+
+    f = functools.partial(total_unq_words_stop, stops=stops)
+    X['total_unq_words_stop'] = data.apply(f, axis=1, raw=True)  #16
+
+    X['char_ratio'] = data.apply(char_ratio, axis=1, raw=True) #17
+
+    return X
+
 # --- addition end ---
 
 train_df['q1_q2_intersect'] = train_df.apply(q1_q2_intersect, axis=1, raw=True)
@@ -324,25 +436,6 @@ train_df['q2_freq'] = train_df.apply(q2_freq, axis=1, raw=True)
 test_df['q1_q2_intersect'] = test_df.apply(q1_q2_intersect, axis=1, raw=True)
 test_df['q1_freq'] = test_df.apply(q1_freq, axis=1, raw=True)
 test_df['q2_freq'] = test_df.apply(q2_freq, axis=1, raw=True)
-
-# --- addition start ---
-
-train_df['word_share'] = train_df.apply(word_match_share, axis=1, raw=True)
-train_df['tfidf_word_share'] = train_df.apply(tfidf_word_match_share, axis=1, raw=True)
-train_df['n_similarity'] = train_df.apply(word2vec_n_similarity, axis=1, raw=True)
-train_df['sentence_distance'] = sentence_distance(sequences_1, sequences_2)
-train_df['sentence_cosine_similarity'] = sentence_cosine_similarity(sequences_1, sequences_2)
-train_df['sentence_intersections'] = sentence_intersections(sequences_1, sequences_2)
-
-test_df['word_share'] = test_df.apply(word_match_share, axis=1, raw=True)
-test_df['tfidf_word_share'] = test_df.apply(tfidf_word_match_share, axis=1, raw=True)
-test_df['n_similarity'] = test_df.apply(word2vec_n_similarity, axis=1, raw=True)
-test_df['sentence_distance'] = sentence_distance(test_sequences_1, test_sequences_2)
-test_df['sentence_cosine_similarity'] = sentence_cosine_similarity(test_sequences_1, test_sequences_2)
-test_df['sentence_intersections'] = sentence_intersections(test_sequences_1, test_sequences_2)
-
-
-# --- addition end ---
 
 # --- remove start ---
 
@@ -355,22 +448,12 @@ test_df['sentence_intersections'] = sentence_intersections(test_sequences_1, tes
 
 leaks = train_df[['q1_q2_intersect', 
                   'q1_freq', 
-                  'q2_freq', 
-                  'word_share', 
-                  'tfidf_word_share', 
-                  'n_similarity',
-                  'sentence_distance',
-                  'sentence_cosine_similarity',
-                  'sentence_intersections']]
+                  'q2_freq']]
+leaks = build_features(leaks, train_df, stops, weights)
 test_leaks = test_df[['q1_q2_intersect', 
                       'q1_freq', 
-                      'q2_freq', 
-                      'word_share', 
-                      'tfidf_word_share', 
-                      'n_similarity',
-                      'sentence_distance',
-                      'sentence_cosine_similarity',
-                      'sentence_intersections']]
+                      'q2_freq']]
+test_leaks = build_features(test_leaks, test_df, stops, weights)
 
 # --- addition end ---
 
