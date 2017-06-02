@@ -40,6 +40,7 @@ from sklearn.preprocessing import StandardScaler
 from nltk.corpus import stopwords
 from collections import Counter
 import gensim
+import math
 
 # --- addition end --- 
 
@@ -224,6 +225,29 @@ def q1_q2_intersect(row):
 
 # --- addition start ---'
 
+def sentence_distance(seq1, seq2):
+    dist = []
+    for s1, s2 in zip(seq1, seq2):
+        dist.append(max(len(set(s1) - set(s2)), len(set(s2)- set(s1))))
+    return dist
+
+def counter_cosine_similarity(c1, c2):
+    terms = set(c1).union(c2)
+    dotprod = sum(c1.get(k, 0) * c2.get(k, 0) for k in terms)
+    magA = math.sqrt(sum(c1.get(k, 0)**2 for k in terms))
+    magB = math.sqrt(sum(c2.get(k, 0)**2 for k in terms))
+    return dotprod / (magA * magB)
+
+# Reference:
+# https://stackoverflow.com/questions/14720324/compute-the-similarity-between-two-lists
+def sentence_cosine_similarity(listA, listA):
+    counterA = Counter(listA)
+    counterB = Counter(listB)
+    return counter_cosine_similarity(counterA, counterB)
+
+def sentence_intersections(listA, listB):
+    return len(set(listA).intersection(set(listB)))
+
 stops = set(stopwords.words("english"))
 def word_match_share(row):
     q1words = {}
@@ -306,10 +330,17 @@ test_df['q2_freq'] = test_df.apply(q2_freq, axis=1, raw=True)
 train_df['word_share'] = train_df.apply(word_match_share, axis=1, raw=True)
 train_df['tfidf_word_share'] = train_df.apply(tfidf_word_match_share, axis=1, raw=True)
 train_df['n_similarity'] = train_df.apply(word2vec_n_similarity, axis=1, raw=True)
+train_df['sentence_distance'] = sentence_distance(sequences_1, sequences_2)
+train_df['sentence_cosine_similarity'] = sentence_cosine_similarity(sequences_1, sequences_2)
+train_df['sentence_intersections'] = sentence_intersections(sequences_1, sequences_2)
 
 test_df['word_share'] = test_df.apply(word_match_share, axis=1, raw=True)
 test_df['tfidf_word_share'] = test_df.apply(tfidf_word_match_share, axis=1, raw=True)
 test_df['n_similarity'] = test_df.apply(word2vec_n_similarity, axis=1, raw=True)
+test_df['sentence_distance'] = sentence_distance(test_sequences_1, test_sequences_2)
+test_df['sentence_cosine_similarity'] = sentence_cosine_similarity(test_sequences_1, test_sequences_2)
+test_df['sentence_intersections'] = sentence_intersections(test_sequences_1, test_sequences_2)
+
 
 # --- addition end ---
 
@@ -327,13 +358,19 @@ leaks = train_df[['q1_q2_intersect',
                   'q2_freq', 
                   'word_share', 
                   'tfidf_word_share', 
-                  'n_similarity']]
+                  'n_similarity',
+                  'sentence_distance',
+                  'sentence_cosine_similarity',
+                  'sentence_intersections']]
 test_leaks = test_df[['q1_q2_intersect', 
                       'q1_freq', 
                       'q2_freq', 
                       'word_share', 
                       'tfidf_word_share', 
-                      'n_similarity']]
+                      'n_similarity',
+                      'sentence_distance',
+                      'sentence_cosine_similarity',
+                      'sentence_intersections']]
 
 # --- addition end ---
 
