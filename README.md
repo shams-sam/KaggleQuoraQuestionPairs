@@ -4,6 +4,8 @@
 ###### Additions
 - New features for xgboost
 - using google word2vec model
+- using stanford glove model
+- using LSTM with additional features
 
 ###### Setup
 - Download [data](https://drive.google.com/open?id=0BxedRvE84NXkZXVHY3MtcHBQRFk) and place in the project root folder
