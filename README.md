@@ -8,4 +8,4 @@
 - using LSTM with additional features
 
 ###### Setup
-- Download [data](https://drive.google.com/open?id=0BxedRvE84NXkZXVHY3MtcHBQRFk) and place in the project root folder
+- Download [data](https://drive.google.com/open?id=0ByBfN7yJVa9qSWkwc1VrYXNScDg) and place in the project root folder
